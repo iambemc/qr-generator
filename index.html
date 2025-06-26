@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Interactive QR Code Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript" src="https://unpkg.com/qr-code-styling@1.5.0/lib/qr-code-styling.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Slate & Teal -->
+    <!-- Application Structure Plan: The SPA has been evolved into a multi-functional suite. The core layout remains a two-column design for configuration and preview. The configuration side now features an expanded tab system for multiple data types (URL, WiFi, vCard, Email, Event, SMS). Advanced options are cleanly organized into accordions for Colors/Logo, Frames/Text, and Shapes/Styles. A URL shortener is integrated directly into the URL tab. This structure scales to handle the rich feature set without overwhelming the user. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: QR Code generation for multiple data types & visual styles. Goal: Allow creation of highly customized QR codes. Viz/Method: A dynamic <canvas> that combines the output from the qr-code-styling library with manually drawn frames and text. Interaction: The tabbed interface and accordions provide access to all features. User input triggers a live-updating preview. Justification: This hybrid rendering approach allows for both validated QR codes (from the library) and creative additions (frames/text), offering maximum flexibility. Library: qr-code-styling.js and the native Canvas API.
+        - Report Info: Calendar and SMS QR codes. Goal: Add high-utility, real-world use cases. Viz/Method: New tabs with dedicated forms for vEvent and SMSTO data. Interaction: Users fill in structured data (like event times or phone numbers). Justification: Directly addresses common user needs for QR codes beyond simple links.
+        - Report Info: Pre-designed style palettes. Goal: Simplify the creation of visually appealing codes. Viz/Method: A row of clickable buttons. Interaction: Clicking a button instantly applies a pre-defined gradient to the color pickers and updates the QR code. Justification: Lowers the barrier to entry for good design and enhances user experience.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Inter', sans-serif; scroll-behavior: smooth; }
+        .tab-button.active { border-color: #14b8a6; color: #14b8a6; background-color: #f0fdfa; }
+        #final-canvas-container {
+            width: 100%;
+            max-width: 400px;
+            height: auto;
+            aspect-ratio: 1 / 1;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #final-canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 0.5rem;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <div id="password-overlay" class="fixed inset-0 bg-slate-200 bg-opacity-80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-white p-8 rounded-xl shadow-2xl text-center">
+            <h2 class="text-2xl font-bold text-slate-800 mb-2">Access Required</h2>
+            <p class="text-slate-600 mb-6">Please enter the password to continue.</p>
+            <input type="password" id="password-input" class="w-full p-3 border border-slate-300 rounded-md shadow-sm text-center mb-4" placeholder="Password">
+            <p id="password-error" class="text-red-500 text-sm mb-4 hidden">Incorrect password. Please try again.</p>
+            <button id="password-submit" class="w-full bg-teal-600 text-white font-bold py-3 px-4 rounded-md hover:bg-teal-700 transition-colors">Unlock</button>
+        </div>
+    </div>
+
+    <div id="main-content" class="hidden">
+        <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+            
+            <header class="text-center mb-8 md:mb-12">
+                <h1 class="text-3xl md:text-5xl font-bold text-slate-900">Professional QR Code Generator</h1>
+                 <div class="mt-6 flex justify-center">
+                    <img src="scanistabanner.jpg" alt="Scanista" class="w-full max-w-xl mx-auto rounded-lg shadow-md" onerror="this.onerror=null;this.src='https://placehold.co/1200x200/fde047/333333?text=Scanista';">
+                </div>
+            </header>
+
+            <main class="bg-white rounded-xl shadow-lg p-4 sm:p-6 lg:p-8">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12">
+                    
+                    <div class="flex flex-col space-y-4">
+                        <h2 class="text-2xl font-bold text-slate-900 border-b pb-3 mb-2">1. Choose Data Type</h2>
+                        <div class="border-b border-slate-200">
+                            <nav class="-mb-px grid grid-cols-3 sm:flex gap-2" aria-label="Tabs">
+                                <button class="tab-button active flex-1 text-center whitespace-nowrap py-3 px-1 border-b-2 font-semibold text-sm rounded-t-lg" data-type="url">URL</button>
+                                <button class="tab-button flex-1 text-center whitespace-nowrap py-3 px-1 border-b-2 font-semibold text-sm rounded-t-lg text-slate-500 border-transparent hover:text-slate-700" data-type="wifi">WiFi</button>
+                                <button class="tab-button flex-1 text-center whitespace-nowrap py-3 px-1 border-b-2 font-semibold text-sm rounded-t-lg text-slate-500 border-transparent hover:text-slate-700" data-type="vcard">vCard</button>
+                                <button class="tab-button flex-1 text-center whitespace-nowrap py-3 px-1 border-b-2 font-semibold text-sm rounded-t-lg text-slate-500 border-transparent hover:text-slate-700" data-type="email">Email</button>
+                                <button class="tab-button flex-1 text-center whitespace-nowrap py-3 px-1 border-b-2 font-semibold text-sm rounded-t-lg text-slate-500 border-transparent hover:text-slate-700" data-type="event">Event</button>
+                                <button class="tab-button flex-1 text-center whitespace-nowrap py-3 px-1 border-b-2 font-semibold text-sm rounded-t-lg text-slate-500 border-transparent hover:text-slate-700" data-type="sms">SMS</button>
+                            </nav>
+                        </div>
+
+                        <div id="form-container" class="space-y-4">
+                            <div id="url-form" class="data-form space-y-4">
+                                <input type="text" id="url-input" placeholder="https://example.com" class="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:ring-teal-500 focus:border-teal-500">
+                                 <label class="flex items-center space-x-2 text-sm">
+                                    <input type="checkbox" id="shorten-url-toggle" class="h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500">
+                                    <span>Shorten URL with TinyURL (for analytics & cleaner codes)</span>
+                                </label>
+                            </div>
+                            <div id="wifi-form" class="data-form space-y-4 hidden"><input type="text" id="wifi-ssid" placeholder="Network Name (SSID)" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><input type="password" id="wifi-pass" placeholder="Password" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><select id="wifi-auth" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><option value="WPA">WPA/WPA2</option><option value="WEP">WEP</option><option value="nopass">No Password</option></select></div>
+                            <div id="vcard-form" class="data-form space-y-4 hidden"><input type="text" id="vcard-name" placeholder="Full Name" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><input type="tel" id="vcard-phone" placeholder="Phone" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><input type="email" id="vcard-email" placeholder="Email" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"></div>
+                            <div id="email-form" class="data-form space-y-4 hidden"><input type="email" id="email-to" placeholder="Recipient Email" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><input type="text" id="email-subject" placeholder="Subject" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><textarea id="email-body" placeholder="Message..." class="w-full p-2 border border-slate-300 rounded-md shadow-sm" rows="2"></textarea></div>
+                            <div id="event-form" class="data-form space-y-4 hidden"><input type="text" id="event-title" placeholder="Event Title" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><input type="text" id="event-location" placeholder="Location" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><div class="grid grid-cols-2 gap-4"><div><label class="text-sm">Start Time</label><input type="datetime-local" id="event-start" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"></div><div><label class="text-sm">End Time</label><input type="datetime-local" id="event-end" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"></div></div></div>
+                            <div id="sms-form" class="data-form space-y-4 hidden"><input type="tel" id="sms-phone" placeholder="Phone Number" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><textarea id="sms-body" placeholder="Message..." class="w-full p-2 border border-slate-300 rounded-md shadow-sm" rows="2"></textarea></div>
+                        </div>
+                        
+                        <h2 class="text-2xl font-bold text-slate-900 border-b pb-3 pt-4 mb-2">2. Customize Appearance</h2>
+                        
+                        <div id="accordion-container" class="space-y-2">
+                            <div class="border border-slate-200 rounded-lg">
+                               <button class="accordion-toggle w-full flex justify-between items-center p-3 font-semibold text-left"><span>Colors & Logo</span><span class="transform transition-transform duration-300">▼</span></button>
+                               <div class="accordion-content p-4 pt-0 space-y-4">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div><label for="fill-color1">Color 1</label><input type="color" id="fill-color1" value="#000000" class="w-full h-10 p-1 border-slate-300 rounded-md"></div>
+                                        <div><label for="fill-color2">Color 2 (Gradient)</label><input type="color" id="fill-color2" value="#000000" class="w-full h-10 p-1 border-slate-300 rounded-md"></div>
+                                    </div>
+                                    <label class="text-sm">Style Palettes</label>
+                                    <div id="palette-container" class="grid grid-cols-3 gap-2">
+                                        <button class="palette-btn h-8 rounded" style="background: linear-gradient(to right, #6EE7B7, #3B82F6);" data-c1="#6EE7B7" data-c2="#3B82F6"></button>
+                                        <button class="palette-btn h-8 rounded" style="background: linear-gradient(to right, #F9A8D4, #9333EA);" data-c1="#F9A8D4" data-c2="#9333EA"></button>
+                                        <button class="palette-btn h-8 rounded" style="background: linear-gradient(to right, #FBBF24, #EF4444);" data-c1="#FBBF24" data-c2="#EF4444"></button>
+                                    </div>
+                                    <div><label for="back-color">Background</label><input type="color" id="back-color" value="#FFFFFF" class="w-full h-10 p-1 border-slate-300 rounded-md"></div>
+                                    <div><label for="logo-upload" class="block text-sm font-medium text-slate-700 mb-1">Logo</label><input type="file" id="logo-upload" accept="image/*" class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"></div>
+                               </div>
+                            </div>
+                            <div class="border border-slate-200 rounded-lg">
+                               <button class="accordion-toggle w-full flex justify-between items-center p-3 font-semibold text-left"><span>Frame & Text</span><span class="transform transition-transform duration-300">▼</span></button>
+                               <div class="accordion-content p-4 pt-0 space-y-4">
+                                   <label for="frame-style">Frame Style</label><select id="frame-style" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><option value="none">None</option><option value="box">Simple Box</option></select>
+                                   <label for="cta-text">Call to Action Text</label><input type="text" id="cta-text" placeholder="e.g., Scan Me!" class="w-full p-2 border border-slate-300 rounded-md shadow-sm">
+                               </div>
+                            </div>
+                            <div class="border border-slate-200 rounded-lg">
+                               <button class="accordion-toggle w-full flex justify-between items-center p-3 font-semibold text-left"><span>Shapes & Styles</span><span class="transform transition-transform duration-300">▼</span></button>
+                               <div class="accordion-content p-4 pt-0 space-y-4">
+                                   <label for="dots-style">Module Style</label><select id="dots-style" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><option value="square">Square</option><option value="dots">Dots</option><option value="rounded">Rounded</option><option value="extra-rounded">Extra Rounded</option><option value="classy">Classy</option><option value="classy-rounded">Classy Rounded</option></select>
+                                   <label for="corners-style">Eye Style</label><select id="corners-style" class="w-full p-2 border border-slate-300 rounded-md shadow-sm"><option value="square">Square</option><option value="dot">Dot</option><option value="extra-rounded">Extra Rounded</option></select>
+                               </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col items-center justify-start bg-slate-50 rounded-lg p-4">
+                         <h2 class="text-2xl font-bold text-slate-900 mb-4">3. Preview & Download</h2>
+                        <div id="error-message" class="w-full bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md relative hidden mb-4" role="alert"><strong class="font-bold">Error:</strong><span class="block sm:inline" id="error-text"></span></div>
+                        <div id="final-canvas-container" class="bg-white shadow-inner p-2 rounded-lg"><canvas id="final-canvas"></canvas></div>
+                        <div id="qr-code-instance-container" class="hidden"></div>
+                        <div class="mt-6 flex space-x-4">
+                            <button id="download-png-btn" class="bg-slate-700 text-white font-semibold py-2 px-5 rounded-md hover:bg-slate-800 transition-colors">Download PNG</button>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <section id="history-section" class="mt-12 md:mt-16">
+                 <div class="text-center mb-8"><h2 class="text-2xl md:text-3xl font-bold text-slate-900">Recent Codes</h2><p class="text-sm text-slate-500">(Saved in your browser's cache. Not stored online.)</p></div>
+                 <div id="history-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <p id="no-history-text" class="col-span-full text-center text-slate-500">Your recent QR codes will appear here.</p>
+                 </div>
+            </section>
+
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- Password Protection ---
+        const passwordOverlay = document.getElementById('password-overlay');
+        const mainContent = document.getElementById('main-content');
+        const passwordInput = document.getElementById('password-input');
+        const passwordSubmit = document.getElementById('password-submit');
+        const passwordError = document.getElementById('password-error');
+        
+        // ######################################################
+        // ## CHANGE YOUR PASSWORD HERE ##
+        // ######################################################
+        const CORRECT_PASSWORD = "scanista"; 
+        
+        function checkPassword() {
+            if (passwordInput.value.toLowerCase() === CORRECT_PASSWORD.toLowerCase()) {
+                passwordOverlay.style.transition = 'opacity 0.5s ease-out';
+                passwordOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    passwordOverlay.style.display = 'none';
+                    mainContent.style.display = 'block';
+                    initializeApp(); // Initialize the app only after correct password
+                }, 500);
+            } else {
+                passwordError.style.display = 'block';
+            }
+        }
+        
+        passwordSubmit.addEventListener('click', checkPassword);
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                checkPassword();
+            }
+        });
+
+
+        // --- QR Code Application Logic ---
+        let UIElements, logoImage, history, debounceTimer, qrCodeInstance;
+
+        function initializeApp() {
+            UIElements = {
+                dataType: 'url', urlInput: document.getElementById('url-input'), shortenUrlToggle: document.getElementById('shorten-url-toggle'),
+                wifiSsid: document.getElementById('wifi-ssid'), wifiPass: document.getElementById('wifi-pass'), wifiAuth: document.getElementById('wifi-auth'),
+                vcardName: document.getElementById('vcard-name'), vcardPhone: document.getElementById('vcard-phone'), vcardEmail: document.getElementById('vcard-email'),
+                emailTo: document.getElementById('email-to'), emailSub: document.getElementById('email-subject'), emailBody: document.getElementById('email-body'),
+                eventTitle: document.getElementById('event-title'), eventLocation: document.getElementById('event-location'), eventStart: document.getElementById('event-start'), eventEnd: document.getElementById('event-end'),
+                smsPhone: document.getElementById('sms-phone'), smsBody: document.getElementById('sms-body'),
+                logoUpload: document.getElementById('logo-upload'), fillColor1: document.getElementById('fill-color1'), fillColor2: document.getElementById('fill-color2'), backColor: document.getElementById('back-color'),
+                frameStyle: document.getElementById('frame-style'), ctaText: document.getElementById('cta-text'),
+                errorCorrection: document.getElementById('error-correction'), dotsStyle: document.getElementById('dots-style'), cornersStyle: document.getElementById('corners-style'),
+                finalCanvas: document.getElementById('final-canvas'), qrCodeInstanceContainer: document.getElementById('qr-code-instance-container'),
+                downloadPngBtn: document.getElementById('download-png-btn'),
+                errorDiv: document.getElementById('error-message'), errorText: document.getElementById('error-text'),
+                historyContainer: document.getElementById('history-container'), tabs: document.querySelectorAll('.tab-button'), dataForms: document.querySelectorAll('.data-form'), accordions: document.querySelectorAll('.accordion-toggle'), paletteButtons: document.querySelectorAll('.palette-btn'),
+            };
+
+            logoImage = null;
+            history = [];
+            
+            const initialConfig = getCurrentConfig();
+            
+            qrCodeInstance = new QRCodeStyling({
+                width: 400,
+                height: 400,
+                data: "https://scanista.com",
+                ...initialConfig
+            });
+            qrCodeInstance.append(UIElements.qrCodeInstanceContainer);
+            
+            const inputsToTrack = ['url-input', 'wifi-ssid', 'wifi-pass', 'wifi-auth', 'vcard-name', 'vcard-phone', 'vcard-email', 'email-to', 'email-subject', 'email-body', 'event-title', 'event-location', 'event-start', 'event-end', 'sms-phone', 'sms-body', 'fill-color1', 'fill-color2', 'back-color', 'error-correction', 'dots-style', 'corners-style', 'frame-style', 'cta-text'];
+            inputsToTrack.forEach(id => { if (document.getElementById(id)) document.getElementById(id).addEventListener('input', debouncedUpdate); });
+            UIElements.shortenUrlToggle.addEventListener('change', debouncedUpdate);
+            UIElements.logoUpload.addEventListener('change', handleLogoUpload);
+            UIElements.downloadPngBtn.addEventListener('click', handleDownload);
+            UIElements.tabs.forEach(tab => tab.addEventListener('click', handleTabClick));
+            UIElements.accordions.forEach(button => button.addEventListener('click', handleAccordionToggle));
+            UIElements.paletteButtons.forEach(button => button.addEventListener('click', handlePaletteClick));
+            
+            loadHistory();
+            drawFinalOutput();
+        }
+
+        function safeGet(element, property = 'value', defaultValue = '') {
+            if (!element) return defaultValue;
+            const prop = property === 'checked' ? element.checked : element.value;
+            return prop === undefined || prop === null ? defaultValue : prop;
+        }
+
+        function getCurrentConfig() {
+            const config = {
+                type: UIElements.dataType,
+                dotsOptions: { color: safeGet(UIElements.fillColor1, 'value', '#000000'), type: safeGet(UIElements.dotsStyle), gradient: { type: 'linear', colorStops: [{ offset: 0, color: safeGet(UIElements.fillColor1) }, { offset: 1, color: safeGet(UIElements.fillColor2) }] } },
+                backgroundOptions: { color: safeGet(UIElements.backColor, 'value', '#ffffff') },
+                cornersSquareOptions: { type: safeGet(UIElements.cornersStyle), color: safeGet(UIElements.fillColor1) },
+                qrOptions: { errorCorrectionLevel: safeGet(UIElements.errorCorrection, 'value', 'H') },
+                image: logoImage,
+                frameStyle: safeGet(UIElements.frameStyle), ctaText: safeGet(UIElements.ctaText),
+                formData: {
+                    url: safeGet(UIElements.urlInput), shorten: safeGet(UIElements.shortenUrlToggle, 'checked'),
+                    wifiSsid: safeGet(UIElements.wifiSsid), wifiPass: safeGet(UIElements.wifiPass), wifiAuth: safeGet(UIElements.wifiAuth),
+                    vcardName: safeGet(UIElements.vcardName), vcardPhone: safeGet(UIElements.vcardPhone), vcardEmail: safeGet(UIElements.vcardEmail),
+                    emailTo: safeGet(UIElements.emailTo), emailSub: safeGet(UIElements.emailSub), emailBody: safeGet(UIElements.emailBody),
+                    eventTitle: safeGet(UIElements.eventTitle), eventLocation: safeGet(UIElements.eventLocation), eventStart: safeGet(UIElements.eventStart), eventEnd: safeGet(UIElements.eventEnd),
+                    smsPhone: safeGet(UIElements.smsPhone), smsBody: safeGet(UIElements.smsBody),
+                }
+            };
+            if (config.dotsOptions.gradient.colorStops[0].color === config.dotsOptions.gradient.colorStops[1].color) delete config.dotsOptions.gradient;
+            if ((config.cornersSquareOptions.type === 'dot' || config.cornersSquareOptions.type === 'square') && config.dotsOptions.gradient) { config.cornersSquareOptions.gradient = config.dotsOptions.gradient; config.cornersSquareOptions.color = null; }
+            return config;
+        }
+
+        function loadConfig(config) {
+            UIElements.dataType = config.type;
+            UIElements.tabs.forEach(t => {
+                const isActive = t.dataset.type === config.type;
+                t.classList.toggle('active', isActive);
+                 t.classList.toggle('text-slate-500', !isActive);
+                t.classList.toggle('border-transparent', !isActive);
+            });
+            UIElements.dataForms.forEach(f => f.classList.toggle('hidden', f.id !== `${config.type}-form`));
+            
+            const formData = config.formData || {};
+            for (const key in formData) {
+                if (UIElements[key]) {
+                    if (UIElements[key].type === 'checkbox') {
+                        UIElements[key].checked = formData[key];
+                    } else {
+                        UIElements[key].value = formData[key];
+                    }
+                }
+            }
+            
+            UIElements.fillColor1.value = config.dotsOptions.color || '#000000';
+            UIElements.fillColor2.value = config.dotsOptions.gradient ? config.dotsOptions.gradient.colorStops[1].color : UIElements.fillColor1.value;
+            UIElements.backColor.value = config.backgroundOptions.color || '#FFFFFF';
+            UIElements.errorCorrection.value = config.qrOptions.errorCorrectionLevel || 'H';
+            UIElements.dotsStyle.value = config.dotsOptions.type || 'square';
+            UIElements.cornersStyle.value = config.cornersSquareOptions.type || 'square';
+            UIElements.frameStyle.value = config.frameStyle || 'none';
+            UIElements.ctaText.value = config.ctaText || '';
+            logoImage = config.image || null;
+            debouncedUpdate();
+        }
+
+        function formatICalDate(dateString) {
+            if (!dateString) return '';
+            return new Date(dateString).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        }
+
+        async function formatData() {
+            const config = getCurrentConfig();
+            switch (config.type) {
+                case 'url':
+                    if (config.formData.shorten && config.formData.url) {
+                        UIElements.urlInput.disabled = true; UIElements.urlInput.value = "Shortening...";
+                        try {
+                            const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(config.formData.url)}`);
+                            if (!response.ok) throw new Error('Network response was not ok.');
+                            const shortUrl = await response.text();
+                            UIElements.urlInput.value = shortUrl;
+                            return shortUrl;
+                        } catch (e) {
+                            showError("Could not shorten URL."); return config.formData.url;
+                        } finally { UIElements.urlInput.disabled = false; }
+                    }
+                    return config.formData.url;
+                case 'wifi': return `WIFI:T:${config.formData.wifiAuth};S:${config.formData.wifiSsid};P:${config.formData.wifiPass};;`;
+                case 'vcard': return `BEGIN:VCARD\nVERSION:3.0\nN:${config.formData.vcardName}\nFN:${config.formData.vcardName}\nTEL:${config.formData.vcardPhone}\nEMAIL:${config.formData.vcardEmail}\nEND:VCARD`;
+                case 'email': return `mailto:${config.formData.emailTo}?subject=${encodeURIComponent(config.formData.emailSub)}&body=${encodeURIComponent(config.formData.emailBody)}`;
+                case 'event': return `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${config.formData.eventTitle}\nLOCATION:${config.formData.eventLocation}\nDTSTART:${formatICalDate(config.formData.eventStart)}\nDTEND:${formatICalDate(config.formData.eventEnd)}\nEND:VEVENT\nEND:VCALENDAR`;
+                case 'sms': return `SMSTO:${config.formData.smsPhone}:${config.formData.smsBody}`;
+                default: return '';
+            }
+        }
+        
+        function showError(message) { UIElements.errorText.textContent = message; UIElements.errorDiv.classList.remove('hidden'); }
+        function hideError() { UIElements.errorDiv.classList.add('hidden'); }
+
+        async function drawFinalOutput() {
+            hideError();
+            const data = await formatData();
+            if (!data) { showError("Please enter data for the selected QR code type."); return; }
+            
+            const config = getCurrentConfig();
+            qrCodeInstance.update({ ...config, data });
+
+            try {
+                const qrImageBlob = await qrCodeInstance.getRawData('png');
+                if (!qrImageBlob) return;
+
+                const qrImageUrl = URL.createObjectURL(qrImageBlob);
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = UIElements.finalCanvas;
+                    const ctx = canvas.getContext('2d');
+                    const ctaHeight = config.ctaText ? 60 : 0;
+                    const framePadding = config.frameStyle !== 'none' ? 20 : 0;
+                    
+                    canvas.width = 400;
+                    canvas.height = 400 + ctaHeight;
+                    
+                    ctx.fillStyle = config.backgroundOptions.color;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    const qrSize = canvas.width - 2 * framePadding;
+                    ctx.drawImage(img, framePadding, framePadding, qrSize, qrSize);
+                    
+                    if (config.frameStyle === 'box') {
+                        ctx.strokeStyle = config.dotsOptions.color;
+                        ctx.lineWidth = 4;
+                        ctx.strokeRect(framePadding, framePadding, qrSize, qrSize);
+                    }
+                    
+                    if (config.ctaText) {
+                        ctx.fillStyle = config.dotsOptions.color;
+                        ctx.font = 'bold 24px Inter, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(config.ctaText, canvas.width / 2, canvas.height - 20);
+                    }
+                    saveToHistory();
+                    URL.revokeObjectURL(qrImageUrl);
+                };
+                img.src = qrImageUrl;
+            } catch (e) {
+                console.error("Drawing error:", e);
+                showError("Could not draw QR code. Data might be too long.");
+            }
+        }
+        
+        function saveToHistory() {
+            const dataUrl = UIElements.finalCanvas.toDataURL('image/png');
+            const config = getCurrentConfig();
+            const newHistoryItem = {id: Date.now(), ...config, imageDataUrl: dataUrl };
+            history = history.filter(h => h.id !== newHistoryItem.id);
+            history.unshift(newHistoryItem);
+            if (history.length > 10) history.pop();
+            localStorage.setItem('qrHistory', JSON.stringify(history));
+            renderHistory();
+        }
+
+        function loadHistory() {
+            const savedHistory = localStorage.getItem('qrHistory');
+            if (savedHistory) { history = JSON.parse(savedHistory); renderHistory(); }
+        }
+        
+        function renderHistory() {
+            UIElements.historyContainer.innerHTML = history.length === 0 ? `<p id="no-history-text" class="col-span-full text-center text-slate-500">Your recent QR codes will appear here.</p>` : '';
+            history.forEach(item => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'bg-white p-2 rounded-lg shadow space-y-2 flex flex-col items-center cursor-pointer';
+                historyItem.innerHTML = `<img src="${item.imageDataUrl}" class="w-full h-auto rounded-md pointer-events-none"><div class="flex space-x-1 w-full"><button class="delete-btn w-full bg-red-50 text-red-700 text-xs font-bold py-1 px-2 rounded hover:bg-red-100">Delete</button></div>`;
+                historyItem.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('delete-btn')) { history = history.filter(h => h.id !== item.id); localStorage.setItem('qrHistory', JSON.stringify(history)); renderHistory(); }
+                    else { loadConfig(item); window.scrollTo(0,0); }
+                });
+                UIElements.historyContainer.appendChild(historyItem);
+            });
+        }
+        
+        function handleLogoUpload(e) {
+            if (e.target.files && e.target.files[0]) { logoImage = URL.createObjectURL(e.target.files[0]); debouncedUpdate(); }
+        }
+
+        function handleDownload() {
+            const link = document.createElement('a');
+            link.download = 'qrcode.png';
+            link.href = UIElements.finalCanvas.toDataURL('image/png');
+            link.click();
+        }
+
+        function handleTabClick(e) {
+            const tab = e.currentTarget;
+            UIElements.dataType = tab.dataset.type;
+            UIElements.tabs.forEach(t => {
+                t.classList.remove('active');
+                t.classList.add('text-slate-500', 'border-transparent');
+            });
+            tab.classList.add('active');
+            tab.classList.remove('text-slate-500', 'border-transparent');
+            UIElements.dataForms.forEach(f => f.classList.add('hidden'));
+            document.getElementById(`${tab.dataset.type}-form`).classList.remove('hidden');
+            debouncedUpdate();
+        }
+        
+        function handleAccordionToggle(e) {
+            const button = e.currentTarget;
+            const content = button.nextElementSibling;
+            const icon = button.querySelector('span:last-child');
+            content.style.maxHeight ? (content.style.maxHeight = null, icon.style.transform = 'rotate(0deg)') : (content.style.maxHeight = content.scrollHeight + "px", icon.style.transform = 'rotate(180deg)');
+        }
+
+        function handlePaletteClick(e) {
+            const button = e.currentTarget;
+            UIElements.fillColor1.value = button.dataset.c1;
+            UIElements.fillColor2.value = button.dataset.c2;
+            debouncedUpdate();
+        }
+
+        function debouncedUpdate() { clearTimeout(debounceTimer); debounceTimer = setTimeout(drawFinalOutput, 300); }
+        
+    });
+    </script>
+
+</body>
+</html>
